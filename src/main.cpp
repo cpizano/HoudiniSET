@@ -22,6 +22,7 @@
 
 const wchar_t kProdVersion[] = L"0.0.1";
 Houdini* g_houdini;
+WNDPROC  g_edit_ctrl_proc;
 
 namespace {
 
@@ -69,32 +70,90 @@ void SetTitle(HWND hwnd) {
   ::SetWindowTextW(hwnd, buf);
 }
 
+LRESULT CALLBACK EditSubProc2(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  switch (message) {
+    case WM_KEYDOWN:
+      if (wParam == VK_RETURN) {
+        ::Beep(440, 40);
+      }
+    default:
+      ;
+  };
+  return ::CallWindowProcW(g_edit_ctrl_proc, hwnd, message, wParam, lParam);
+}
+
+LRESULT CALLBACK EditSubProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  switch (message) {
+    case WM_GETDLGCODE:
+      return (DLGC_WANTALLKEYS |
+          CallWindowProc(g_edit_ctrl_proc, hwnd, message, wParam, lParam));
+    case WM_CHAR:
+      if ((wParam == VK_RETURN) || (wParam == VK_TAB))
+        return 0;
+      break;
+    case WM_KEYDOWN:
+      if ((wParam == VK_RETURN) || (wParam == VK_TAB)) {
+        // do stuff here
+        return FALSE;
+      }
+      break;
+  }
+  return CallWindowProc(g_edit_ctrl_proc, hwnd, message, wParam, lParam);
+}
+				
+
 BOOL OnInitDialog(HWND hwnd, HWND hwnd_focus, LPARAM lParam) {
   SetTitle(hwnd);
   HWND richedit = ::GetDlgItem(hwnd, IDC_RICHEDIT21);
   g_houdini = new Houdini(new RichEditOutput(richedit));
 
+  // Subclass the edit control because we want the return key.
+  HWND edit = ::GetDlgItem(hwnd, IDC_EDIT1);
+  g_edit_ctrl_proc = reinterpret_cast<WNDPROC>(::GetWindowLongPtrW(edit, GWLP_WNDPROC));
+  ::SetWindowLongPtrW(edit, GWLP_WNDPROC, LONG_PTR(EditSubProc));
+
   return TRUE;
+}
+
+void OnEditCtrlChanged(HWND ctrl, UINT notify) {
+  switch (notify) {
+    case  EN_CHANGE: {
+        wchar_t line[80];
+        Edit_GetLine(ctrl, 0, line, _countof(line));
+        break;
+      }
+    default:
+      ;
+  };
 }
 
 void OnCommand(HWND hwnd, int id, HWND ctl, UINT notify) {
   switch (id) {
+    case IDC_EDIT1:
+      OnEditCtrlChanged(ctl, notify);
+      break;
     default:
       ;
-  }
+  };
+
 }
 
 void OnClose(HWND hWnd) {
   EndDialog(hWnd, 0);
 }
 
-INT_PTR CALLBACK DialogProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+void OnChar(HWND hwnd, TCHAR ch, int cRepeat) {
+  ::Beep(440, 40);
+}
+
+INT_PTR CALLBACK DialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
   switch (message) {
-    HANDLE_MSG(hWnd, WM_INITDIALOG, OnInitDialog);
-    HANDLE_MSG(hWnd, WM_COMMAND, OnCommand);
-    HANDLE_MSG(hWnd, WM_CLOSE, OnClose);
+    HANDLE_MSG(hwnd, WM_CLOSE, OnClose);
+    HANDLE_MSG(hwnd, WM_CHAR, OnChar);
+    HANDLE_MSG(hwnd, WM_INITDIALOG, OnInitDialog);
+    HANDLE_MSG(hwnd, WM_COMMAND, OnCommand);
   default:
-      return FALSE;
+    return FALSE;
   }
   return 0;
 }
