@@ -57,6 +57,7 @@ public:
   }
 
   void ScreenOutput::NewLine() override {
+    AddRTF(hwnd_, " \\line");
   }
 
 private:
@@ -93,7 +94,18 @@ LRESULT CALLBACK EditSubProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
       break;
     case WM_KEYDOWN:
       if ((wParam == VK_RETURN) || (wParam == VK_TAB)) {
-        // do stuff here
+        wchar_t line[120];
+        int cc = Edit_GetLine(hwnd, 0, line, _countof(line));
+        if ((cc < 0) || (cc > _countof(line))) {
+          ::Beep(440, 300);
+          return FALSE;
+        }
+        line[cc] = 0;
+        char linen[120];
+        size_t converted = 0;
+        wcstombs_s(&converted, linen, line, _TRUNCATE);
+        g_houdini->InputCommand(linen);
+        Edit_SetText(hwnd, L"");
         return FALSE;
       }
       break;
@@ -115,27 +127,14 @@ BOOL OnInitDialog(HWND hwnd, HWND hwnd_focus, LPARAM lParam) {
   return TRUE;
 }
 
-void OnEditCtrlChanged(HWND ctrl, UINT notify) {
-  switch (notify) {
-    case  EN_CHANGE: {
-        wchar_t line[80];
-        Edit_GetLine(ctrl, 0, line, _countof(line));
-        break;
-      }
-    default:
-      ;
-  };
-}
-
 void OnCommand(HWND hwnd, int id, HWND ctl, UINT notify) {
   switch (id) {
     case IDC_EDIT1:
-      OnEditCtrlChanged(ctl, notify);
+      //OnEditCtrlChanged(ctl, notify);
       break;
     default:
       ;
   };
-
 }
 
 void OnClose(HWND hWnd) {
