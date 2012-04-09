@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <cctype>
 #include <vector>
+#include <sstream>
+#include <map>
+
+using namespace houdini;
 
 namespace {
 
@@ -36,12 +40,108 @@ void tokenize(const std::string& str, ContainerT& tokens,
    }
 };
 
-}
+class ScopedReadLock {
+public:
+  ScopedReadLock(SRWLOCK* rwlock) : rwlock_(rwlock)  {
+    ::AcquireSRWLockShared(rwlock_);
+  }
 
-struct Houdini::State {
-  ScreenOutput* so;
+  ~ScopedReadLock()  {
+    ::ReleaseSRWLockShared(rwlock_);
+  }
+
+private:
+  ScopedReadLock(const ScopedReadLock&);
+  SRWLOCK* rwlock_;
 };
 
+class ScopedWriteLock {
+public:
+  ScopedWriteLock(SRWLOCK* rwlock) : rwlock_(rwlock)  {
+    ::AcquireSRWLockExclusive(rwlock_);
+  }
+
+  ~ScopedWriteLock()  {
+    ::ReleaseSRWLockExclusive(rwlock_);
+  }
+
+private:
+  ScopedWriteLock(const ScopedWriteLock&);
+  SRWLOCK* rwlock_;
+};
+
+
+}  // namespace
+
+struct ProcessTracker {
+  DWORD pid;
+  std::string how;
+  ULONGLONG when;
+
+  ProcessTracker() : pid(0), when(0) {}
+
+  ProcessTracker(DWORD pid_i, const std::string& how_i) 
+      : pid(pid_i), how(how_i) {
+    when = ::GetTickCount64();
+  }
+
+};
+
+struct Houdini::State {
+  SRWLOCK rwlock;
+  ScreenOutput* so;
+  std::map<HANDLE, ProcessTracker> processes;
+  std::map<TP_WAIT*, HANDLE> reg_ob_waits;
+
+  State(ScreenOutput* so_i) {
+    so = so_i;
+    ::InitializeSRWLock(&rwlock);
+  }
+};
+
+struct PoolWaitContext {
+  Houdini::State* state;
+  HANDLE handle;
+  PoolWaitContext(Houdini::State* state_i, HANDLE handle_i)
+    : state(state_i), handle(handle_i) {}
+};
+
+void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
+                               void* param,
+                               TP_WAIT* wait,
+                               DWORD wait_result) {
+  ULONGLONG time = ::GetTickCount64();
+  PoolWaitContext ctx = *reinterpret_cast<PoolWaitContext*>(param);
+  delete reinterpret_cast<PoolWaitContext*>(param);
+
+  std::ostringstream oss("\\cf1 ");
+  { // read lock
+    ScopedReadLock lock(&ctx.state->rwlock);
+    auto it  = ctx.state->processes.find(ctx.handle);
+    if (it == ctx.state->processes.end()) {
+      oss << "signaled handle \\cf2 " << ctx.handle << " \\cf1 unknown!";
+      ctx.state->so->Output(oss.str().c_str());
+      return;
+    } else {
+      oss << "\\cf1 process \\cf2 " << it->second.pid << " \\cf1 terminated,";
+      DWORD exit_code;
+      if (::GetExitCodeProcess(it->first, &exit_code)) {
+        oss << " exit code \\cf2 " << exit_code;
+      }
+      oss << " \\cf1 tracked for \\cf2 " << (time - it->second.when) << "ms";
+      ctx.state->so->Output(oss.str().c_str());
+      ctx.state->so->NewLine();
+    }
+  }  // read lock end
+  {  // write lock
+    ScopedWriteLock lock(&ctx.state->rwlock);
+    ctx.state->processes.erase(ctx.handle);
+    ::CloseHandle(ctx.handle);
+    ctx.state->reg_ob_waits.erase(wait);
+    ::SetThreadpoolWait(wait, NULL, NULL);
+    ::CloseThreadpoolWait(wait);
+  }  // write lock end
+}
 
 void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
@@ -49,7 +149,9 @@ void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
     state->so->NewLine();
     state->so->Output("\\cf1 help");
     state->so->NewLine();
-    state->so->Output("\\cf1 quit");
+    state->so->Output("\\cf1 quit or exit");
+    state->so->NewLine();
+    state->so->Output("\\cf1 track");
     state->so->NewLine();
   }
   else {
@@ -58,8 +160,54 @@ void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
   }
 }
 
-Houdini::Houdini(ScreenOutput* so) : state_(new State) {
-  state_->so = so;
+void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
+  if (tokens.size() == 1) {
+    state->so->Output("\\cf1 use track ? for help");
+    state->so->NewLine();
+    return;
+  }
+  
+  if (tokens[1] == "?") {
+    state->so->Output("\\cf1 track p[pid]");
+    state->so->NewLine();
+  } else {
+    ScopedWriteLock lock(&state->rwlock);
+    char p_or_h = 0;
+    unsigned int pid = 0;
+    std::istringstream iss(tokens[1]);
+    std::ostringstream oss;
+    iss >> p_or_h;
+    if (p_or_h != 'p') {
+      state->so->Output("\\cf1 invalid 1st parameter");
+      state->so->NewLine();
+      return;
+    }
+    iss >> pid;
+    HANDLE handle = ::OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!handle) {
+      handle = ::OpenProcess(SYNCHRONIZE, FALSE, pid);
+      if (!handle) {
+        DWORD gle = ::GetLastError();
+        oss << "\\cf1 failed to open process \\cf2 " << pid << " \\cf1 requesting SYNCHRONIZE access.";
+        oss << " error \\cf2 " << gle;
+        state->so->Output(oss.str().c_str());
+        state->so->NewLine();
+        return;
+      }
+    }
+    state->processes[handle] = ProcessTracker(pid, "track");
+    PoolWaitContext* pwc = new PoolWaitContext(state, handle);
+    TP_WAIT* wait_object = ::CreateThreadpoolWait(&PoolWaitCallback, pwc, NULL);
+    ::SetThreadpoolWait(wait_object, handle, NULL);
+    state->reg_ob_waits[wait_object] = handle;
+    oss << "\\cf1 tracking process \\cf2 " << pid << " \\cf1 with handle \\cf2 0x" << handle;
+    state->so->Output(oss.str().c_str());
+    state->so->NewLine();
+  }
+}
+
+Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
+  // Done with initialization, signal user to start working.
   so->Output("type \\cf1 help \\cf0 for available commands");
   so->NewLine();
 }
@@ -85,8 +233,11 @@ void Houdini::InputCommand(const char* command) {
   const std::string& verb = tokens[0];
   if (verb == "help") {
     OnHelp(state_, tokens);
-  } else if (verb == "quit") {
-    // quitting is hard.
+  } else if (verb == "quit" || verb == "exit") {
+    // quitting is hard. for now just crap out.
+    ::ExitProcess(0);
+  } else if (verb == "track") {
+    OnTrack(state_, tokens);
   } else {
     state_->so->Output("\\cf1 huh?");
     state_->so->NewLine();

@@ -1,5 +1,7 @@
 #pragma once
 
+namespace houdini {
+
 class ScreenOutput {
 public:
   virtual void Output(const char* text) = 0;
@@ -18,3 +20,5 @@ private:
   State* state_;
 };
 
+
+}  // namespace houdini

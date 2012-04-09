@@ -21,7 +21,7 @@
 #endif
 
 const wchar_t kProdVersion[] = L"0.0.1";
-Houdini* g_houdini;
+houdini::Houdini* g_houdini;
 WNDPROC  g_edit_ctrl_proc;
 
 namespace {
@@ -49,7 +49,7 @@ void AddRTF(HWND hWnd, const std::string& text1) {
 
 }  // namespace.
 
-class RichEditOutput : public ScreenOutput {
+class RichEditOutput : public houdini::ScreenOutput {
 public:
   RichEditOutput(HWND hwnd) : hwnd_(hwnd) {}
   void ScreenOutput::Output(const char* text) override {
@@ -117,7 +117,7 @@ LRESULT CALLBACK EditSubProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 BOOL OnInitDialog(HWND hwnd, HWND hwnd_focus, LPARAM lParam) {
   SetTitle(hwnd);
   HWND richedit = ::GetDlgItem(hwnd, IDC_RICHEDIT21);
-  g_houdini = new Houdini(new RichEditOutput(richedit));
+  g_houdini = new houdini::Houdini(new RichEditOutput(richedit));
 
   // Subclass the edit control because we want the return key.
   HWND edit = ::GetDlgItem(hwnd, IDC_EDIT1);
