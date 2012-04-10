@@ -1,12 +1,16 @@
 #include "houdini.h"
 
 #include <Windows.h>
+#include <Psapi.h>
+
 #include <string>
 #include <algorithm>
 #include <cctype>
 #include <vector>
 #include <sstream>
 #include <map>
+
+#pragma comment(lib, "psapi.lib")
 
 using namespace houdini;
 
@@ -15,6 +19,7 @@ namespace {
 void locase_str(std::string &str) {
 	std::transform(str.begin(), str.end(), str.begin(), std::tolower);
 }
+
 
 template < class ContainerT >
 void tokenize(const std::string& str, ContainerT& tokens,
@@ -153,6 +158,8 @@ void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
     state->so->NewLine();
     state->so->Output("\\cf1 track");
     state->so->NewLine();
+    state->so->Output("\\cf1 plist");
+    state->so->NewLine();
   }
   else {
     state->so->Output("no command specific help yet");
@@ -206,6 +213,63 @@ void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
   }
 }
 
+void OnPList(Houdini::State* state, std::vector<std::string>& tokens) {
+  if (tokens.size() == 1) {
+    DWORD pids[1024];
+    DWORD needed;
+    if (!::EnumProcesses(pids, sizeof(pids), &needed)) {
+      state->so->Output("\\cf1 plist failed!");
+      return;
+    }
+
+    {
+      needed = needed / sizeof(pids[0]);
+      std::ostringstream oss("\\cf2 ");
+      oss << needed << " \\cf1 processes";
+      state->so->Output(oss.str().c_str());
+      state->so->NewLine();
+    }
+ 
+    for (size_t ix = 0; ix != needed; ++ix) {
+      if (pids[ix] == 0)
+        continue;
+      std::ostringstream oss;
+      oss << "\\cf2 " << pids[ix] << " \\cf1 ";
+      HANDLE handle = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pids[ix]);
+      if (!handle) {
+        DWORD gle = ::GetLastError();
+        if (gle == ERROR_ACCESS_DENIED) {
+          oss << "[access denied]";
+        } else {
+          oss << "[error " << gle << " ]";
+        }
+      } else {
+        char path[300];
+        DWORD nc = GetProcessImageFileNameA(handle, path, _countof(path));
+        if (!nc) {
+          oss << "[no name]";
+        } else {
+          std::string name(path);
+          size_t p1 = name.find_last_of('\\');
+          oss << name.substr(p1 + 1, std::string::npos);
+          size_t p2 = name.find_last_of('\\', p1 - 1);
+          oss << " [" << name.substr(p2 + 1,  (p1 - p2)) << "]";
+        }
+        ::CloseHandle(handle);
+      }
+      state->so->Output(oss.str().c_str());
+      state->so->NewLine();
+    }
+
+  } else if (tokens[1] == "?") {
+    state->so->Output("\\cf1 plist");
+    state->so->NewLine();
+  } else {
+    state->so->Output("\\cf1 unknown param");
+    state->so->NewLine();
+  }
+}
+
 Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
   // Done with initialization, signal user to start working.
   so->Output("type \\cf1 help \\cf0 for available commands");
@@ -237,10 +301,14 @@ void Houdini::InputCommand(const char* command) {
     // quitting is hard. for now just crap out.
     ::ExitProcess(0);
   } else if (verb == "track") {
+    // Track the lifetime of a given process.
     OnTrack(state_, tokens);
+  } else if (verb == "plist") {
+    // List the currently running processes.
+    OnPList(state_, tokens);
   } else {
     state_->so->Output("\\cf1 huh?");
     state_->so->NewLine();
-  }
+  } 
 }
 
