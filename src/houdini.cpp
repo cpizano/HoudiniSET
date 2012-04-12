@@ -75,6 +75,57 @@ private:
   SRWLOCK* rwlock_;
 };
 
+DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
+  DWORD pids[2048];
+  DWORD needed;
+  if (!::EnumProcesses(pids, sizeof(pids), &needed)) {
+    DWORD gle = ::GetLastError();
+    so->Output("\\cf1 plist enumproc failed!");
+    return gle;
+  }
+
+  {
+    needed = needed / sizeof(pids[0]);
+    std::ostringstream oss("\\cf2 ");
+    oss << needed << " \\cf1 processes";
+    so->Output(oss.str().c_str());
+    so->NewLine();
+  }
+ 
+  for (size_t ix = 0; ix != needed; ++ix) {
+    if (pids[ix] == 0)
+      continue;
+    std::ostringstream oss;
+    oss << "\\cf2 " << pids[ix] << " \\cf1 ";
+    HANDLE handle = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pids[ix]);
+    if (!handle) {
+      DWORD gle = ::GetLastError();
+      if (gle == ERROR_ACCESS_DENIED) {
+        oss << "[access denied]";
+      } else {
+        oss << "[error " << gle << " ]";
+      }
+    } else {
+      char path[300];
+      DWORD nc = GetProcessImageFileNameA(handle, path, _countof(path));
+      if (!nc) {
+        oss << "[no name]";
+      } else {
+        std::string name(path);
+        size_t p1 = name.find_last_of('\\');
+        oss << name.substr(p1 + 1, std::string::npos);
+        size_t p2 = name.find_last_of('\\', p1 - 1);
+        oss << " [" << name.substr(p2 + 1,  (p1 - p2)) << "]";
+      }
+      ::CloseHandle(handle);
+    }
+    so->Output(oss.str().c_str());
+    so->NewLine();
+  }
+
+  return 0;
+}
+
 
 }  // namespace
 
@@ -215,52 +266,7 @@ void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
 
 void OnPList(Houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
-    DWORD pids[1024];
-    DWORD needed;
-    if (!::EnumProcesses(pids, sizeof(pids), &needed)) {
-      state->so->Output("\\cf1 plist failed!");
-      return;
-    }
-
-    {
-      needed = needed / sizeof(pids[0]);
-      std::ostringstream oss("\\cf2 ");
-      oss << needed << " \\cf1 processes";
-      state->so->Output(oss.str().c_str());
-      state->so->NewLine();
-    }
- 
-    for (size_t ix = 0; ix != needed; ++ix) {
-      if (pids[ix] == 0)
-        continue;
-      std::ostringstream oss;
-      oss << "\\cf2 " << pids[ix] << " \\cf1 ";
-      HANDLE handle = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pids[ix]);
-      if (!handle) {
-        DWORD gle = ::GetLastError();
-        if (gle == ERROR_ACCESS_DENIED) {
-          oss << "[access denied]";
-        } else {
-          oss << "[error " << gle << " ]";
-        }
-      } else {
-        char path[300];
-        DWORD nc = GetProcessImageFileNameA(handle, path, _countof(path));
-        if (!nc) {
-          oss << "[no name]";
-        } else {
-          std::string name(path);
-          size_t p1 = name.find_last_of('\\');
-          oss << name.substr(p1 + 1, std::string::npos);
-          size_t p2 = name.find_last_of('\\', p1 - 1);
-          oss << " [" << name.substr(p2 + 1,  (p1 - p2)) << "]";
-        }
-        ::CloseHandle(handle);
-      }
-      state->so->Output(oss.str().c_str());
-      state->so->NewLine();
-    }
-
+    ListProcesses(NULL, state->so);
   } else if (tokens[1] == "?") {
     state->so->Output("\\cf1 plist");
     state->so->NewLine();
