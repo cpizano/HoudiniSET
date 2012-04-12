@@ -86,8 +86,8 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
 
   {
     needed = needed / sizeof(pids[0]);
-    std::ostringstream oss("\\cf2 ");
-    oss << needed << " \\cf1 processes";
+    std::ostringstream oss;
+    oss << "\\cf1 total of \\cf2 " << needed << " \\cf1 processes";
     so->Output(oss.str().c_str());
     so->NewLine();
   }
@@ -96,9 +96,9 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
     if (pids[ix] == 0)
       continue;
     std::ostringstream oss;
-    oss << "\\cf2 " << pids[ix] << " \\cf1 ";
     HANDLE handle = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pids[ix]);
-    if (!handle) {
+    if (!handle && !filter) {
+      oss << "\\cf2 " << pids[ix] << " \\cf1 ";
       DWORD gle = ::GetLastError();
       if (gle == ERROR_ACCESS_DENIED) {
         oss << "[access denied]";
@@ -108,10 +108,17 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
     } else {
       char path[300];
       DWORD nc = GetProcessImageFileNameA(handle, path, _countof(path));
-      if (!nc) {
-        oss << "[no name]";
+      if (!nc && !filter) {
+        oss << "[no name] ---";
       } else {
         std::string name(path);
+        if (filter) {
+          size_t ffp = name.find(filter);
+          if (ffp == std::string::npos) {
+            continue;
+          }
+        }
+        oss << "\\cf2 " << pids[ix] << " \\cf1 ";
         size_t p1 = name.find_last_of('\\');
         oss << name.substr(p1 + 1, std::string::npos);
         size_t p2 = name.find_last_of('\\', p1 - 1);
@@ -267,9 +274,13 @@ void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
 void OnPList(Houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
     ListProcesses(NULL, state->so);
-  } else if (tokens[1] == "?") {
-    state->so->Output("\\cf1 plist");
-    state->so->NewLine();
+  } else if (tokens.size() == 2) {
+    if (tokens[1] == "?") {
+      state->so->Output("\\cf1 plist [filter]");
+      state->so->NewLine();
+    } else {
+      ListProcesses(tokens[1].c_str(), state->so);
+    }
   } else {
     state->so->Output("\\cf1 unknown param");
     state->so->NewLine();
@@ -291,7 +302,9 @@ Houdini::~Houdini() {
 void Houdini::InputCommand(const char* command) {
   // Echo the command in the results pane.
   std::string comm(command);
+#if 0
   locase_str(comm);
+#endif
   state_->so->Output(">");
   state_->so->Output(comm.c_str());
   state_->so->NewLine();
