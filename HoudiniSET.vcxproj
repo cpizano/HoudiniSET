@@ -86,6 +86,9 @@
     <ClInclude Include="src\houdini.h" />
     <ClInclude Include="src\resource.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="README" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
