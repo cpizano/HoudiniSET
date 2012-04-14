@@ -133,6 +133,25 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
   return 0;
 }
 
+DWORD ListProcessTimes(HANDLE process, houdini::ScreenOutput* so) {
+  FILETIME creation;
+  FILETIME exit;
+  FILETIME kernel;
+  FILETIME user = {0};
+  if (!::GetProcessTimes(process, &creation, &exit, &kernel, &user)) {
+    return ::GetLastError();
+  }
+  std::ostringstream oss;
+  ULARGE_INTEGER exit_ul = {exit.dwLowDateTime, exit.dwHighDateTime};
+  ULARGE_INTEGER creation_ul = {creation.dwLowDateTime, creation.dwHighDateTime};
+  oss << "\\cf1 times [ \\cf2 " << creation_ul.QuadPart << " \\cf1 ]";
+  oss << "[ \\cf2 " << exit_ul.QuadPart << " \\cf1 ]";
+  double delta_s = double(exit_ul.QuadPart - creation_ul.QuadPart) / double(10000000) ;
+  oss << "( \\cf2 " << delta_s << " \\cf1 )";
+  so->Output(oss.str().c_str());
+  return 0;
+}
+
 
 }  // namespace
 
@@ -191,8 +210,10 @@ void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
       if (::GetExitCodeProcess(it->first, &exit_code)) {
         oss << " exit code \\cf2 " << exit_code;
       }
-      oss << " \\cf1 tracked for \\cf2 " << (time - it->second.when) << "ms";
+      oss << " \\cf1 tracked for \\cf2 " << (time - it->second.when) << "ms ";
       ctx.state->so->Output(oss.str().c_str());
+      ctx.state->so->NewLine();
+      ListProcessTimes(it->first, ctx.state->so);
       ctx.state->so->NewLine();
     }
   }  // read lock end
