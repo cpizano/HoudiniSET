@@ -12,6 +12,8 @@
 
 #pragma comment(lib, "psapi.lib")
 
+#define RCLR(x) "\\cf"#x" "
+
 using namespace houdini;
 
 namespace {
@@ -75,19 +77,53 @@ private:
   SRWLOCK* rwlock_;
 };
 
+HANDLE OpenProcess(const char* process_spec,
+                   DWORD access, DWORD fallback_access,
+                   houdini::ScreenOutput* so) {
+  char p_or_h = 0;
+  unsigned int pid = 0;
+  std::istringstream iss(process_spec);
+  std::ostringstream oss;
+  iss >> p_or_h;
+  if (p_or_h != 'p') {
+    so->Output(RCLR(1)"invalid process id format, use p[pid]");
+    so->NewLine();
+    return NULL;
+  }
+  iss >> pid;
+  HANDLE handle = ::OpenProcess(access, FALSE, pid);
+  if (handle) {
+    return handle;
+  }
+  if (fallback_access != -1) {
+    handle = ::OpenProcess(fallback_access, FALSE, pid);
+    if (handle) {
+      return handle;
+    }
+  }
+
+  DWORD gle = ::GetLastError();
+  oss << RCLR(1)"failed to open process "RCLR(2) << pid;
+  oss << RCLR(1)" requesting "RCLR(2) << fallback_access << RCLR(1)" access.";
+  oss << " error \\cf2 " << gle;
+  so->Output(oss.str().c_str());
+  so->NewLine();
+  return NULL;   
+}
+
 DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
   DWORD pids[2048];
   DWORD needed;
   if (!::EnumProcesses(pids, sizeof(pids), &needed)) {
     DWORD gle = ::GetLastError();
-    so->Output("\\cf1 plist enumproc failed!");
+    so->Output(RCLR(1)"plist enumproc failed!");
     return gle;
   }
 
   {
     needed = needed / sizeof(pids[0]);
     std::ostringstream oss;
-    oss << "\\cf1 total of \\cf2 " << needed << " \\cf1 processes";
+    oss << RCLR(1)"total of "RCLR(2) << needed << RCLR(1)" processes found";
     so->Output(oss.str().c_str());
     so->NewLine();
   }
@@ -98,7 +134,7 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
     std::ostringstream oss;
     HANDLE handle = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pids[ix]);
     if (!handle && !filter) {
-      oss << "\\cf2 " << pids[ix] << " \\cf1 ";
+      oss << RCLR(2) << pids[ix] << RCLR(1) << " ";
       DWORD gle = ::GetLastError();
       if (gle == ERROR_ACCESS_DENIED) {
         oss << "[access denied]";
@@ -118,9 +154,9 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
             continue;
           }
         }
-        oss << "\\cf2 " << pids[ix] << " \\cf1 ";
+        oss << RCLR(2) << pids[ix] << RCLR(1) << " ";
         size_t p1 = name.find_last_of('\\');
-        oss << name.substr(p1 + 1, std::string::npos);
+        oss << RCLR(0) << name.substr(p1 + 1, std::string::npos) << RCLR(1);
         size_t p2 = name.find_last_of('\\', p1 - 1);
         oss << " [" << name.substr(p2 + 1,  (p1 - p2)) << "]";
       }
@@ -144,14 +180,15 @@ DWORD ListProcessTimes(HANDLE process, houdini::ScreenOutput* so) {
   std::ostringstream oss;
   ULARGE_INTEGER exit_ul = {exit.dwLowDateTime, exit.dwHighDateTime};
   ULARGE_INTEGER creation_ul = {creation.dwLowDateTime, creation.dwHighDateTime};
-  oss << "\\cf1 times [ \\cf2 " << creation_ul.QuadPart << " \\cf1 ]";
-  oss << "[ \\cf2 " << exit_ul.QuadPart << " \\cf1 ]";
-  double delta_s = double(exit_ul.QuadPart - creation_ul.QuadPart) / double(10000000) ;
-  oss << "( \\cf2 " << delta_s << " \\cf1 )";
+  oss << RCLR(1)"times ["RCLR(2) << creation_ul.QuadPart << RCLR(1)"]";
+  oss << "["RCLR(2) << exit_ul.QuadPart << RCLR(1)"]";
+  if (exit_ul.QuadPart != 0) {
+    double delta_s = double(exit_ul.QuadPart - creation_ul.QuadPart) / double(10000000) ;
+    oss << "("RCLR(2) << delta_s << RCLR(1)")";
+  }
   so->Output(oss.str().c_str());
   return 0;
 }
-
 
 }  // namespace
 
@@ -196,21 +233,21 @@ void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
   PoolWaitContext ctx = *reinterpret_cast<PoolWaitContext*>(param);
   delete reinterpret_cast<PoolWaitContext*>(param);
 
-  std::ostringstream oss("\\cf1 ");
+  std::ostringstream oss;
   { // read lock
     ScopedReadLock lock(&ctx.state->rwlock);
     auto it  = ctx.state->processes.find(ctx.handle);
     if (it == ctx.state->processes.end()) {
-      oss << "signaled handle \\cf2 " << ctx.handle << " \\cf1 unknown!";
+      oss << RCLR(1)"signaled handle "RCLR(2) << ctx.handle << RCLR(1)" unknown!";
       ctx.state->so->Output(oss.str().c_str());
       return;
     } else {
-      oss << "\\cf1 process \\cf2 " << it->second.pid << " \\cf1 terminated,";
+      oss << RCLR(1)"process "RCLR(2) << it->second.pid << RCLR(1)" terminated,";
       DWORD exit_code;
       if (::GetExitCodeProcess(it->first, &exit_code)) {
-        oss << " exit code \\cf2 " << exit_code;
+        oss << " exit code "RCLR(2) << exit_code;
       }
-      oss << " \\cf1 tracked for \\cf2 " << (time - it->second.when) << "ms ";
+      oss << RCLR(1)" tracked for "RCLR(2) << (time - it->second.when) << "ms ";
       ctx.state->so->Output(oss.str().c_str());
       ctx.state->so->NewLine();
       ListProcessTimes(it->first, ctx.state->so);
@@ -239,6 +276,8 @@ void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
     state->so->NewLine();
     state->so->Output("\\cf1 plist");
     state->so->NewLine();
+    state->so->Output("\\cf1 ptimes");
+    state->so->NewLine();
   }
   else {
     state->so->Output("no command specific help yet");
@@ -258,35 +297,21 @@ void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
     state->so->NewLine();
   } else {
     ScopedWriteLock lock(&state->rwlock);
-    char p_or_h = 0;
-    unsigned int pid = 0;
-    std::istringstream iss(tokens[1]);
     std::ostringstream oss;
-    iss >> p_or_h;
-    if (p_or_h != 'p') {
-      state->so->Output("\\cf1 invalid 1st parameter");
-      state->so->NewLine();
+    HANDLE handle = OpenProcess(tokens[1].c_str(), 
+                                SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, SYNCHRONIZE,
+                                state->so);
+    if (!handle)
       return;
-    }
-    iss >> pid;
-    HANDLE handle = ::OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (!handle) {
-      handle = ::OpenProcess(SYNCHRONIZE, FALSE, pid);
-      if (!handle) {
-        DWORD gle = ::GetLastError();
-        oss << "\\cf1 failed to open process \\cf2 " << pid << " \\cf1 requesting SYNCHRONIZE access.";
-        oss << " error \\cf2 " << gle;
-        state->so->Output(oss.str().c_str());
-        state->so->NewLine();
-        return;
-      }
-    }
+    DWORD pid = ::GetProcessId(handle);
+
     state->processes[handle] = ProcessTracker(pid, "track");
     PoolWaitContext* pwc = new PoolWaitContext(state, handle);
     TP_WAIT* wait_object = ::CreateThreadpoolWait(&PoolWaitCallback, pwc, NULL);
-    ::SetThreadpoolWait(wait_object, handle, NULL);
     state->reg_ob_waits[wait_object] = handle;
-    oss << "\\cf1 tracking process \\cf2 " << pid << " \\cf1 with handle \\cf2 0x" << handle;
+
+    ::SetThreadpoolWait(wait_object, handle, NULL);
+    oss << RCLR(1)"tracking process "RCLR(2) << pid << RCLR(1)" with handle "RCLR(2)"0x" << handle;
     state->so->Output(oss.str().c_str());
     state->so->NewLine();
   }
@@ -297,24 +322,43 @@ void OnPList(Houdini::State* state, std::vector<std::string>& tokens) {
     ListProcesses(NULL, state->so);
   } else if (tokens.size() == 2) {
     if (tokens[1] == "?") {
-      state->so->Output("\\cf1 plist [filter]");
+      state->so->Output(RCLR(1)"plist [filter]");
       state->so->NewLine();
     } else {
       ListProcesses(tokens[1].c_str(), state->so);
     }
   } else {
-    state->so->Output("\\cf1 unknown param");
+    state->so->Output(RCLR(1)"unknown param");
     state->so->NewLine();
   }
 }
 
-Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
-  // Done with initialization, signal user to start working.
-  so->Output("type \\cf1 help \\cf0 for available commands");
-  so->NewLine();
+void OnPTimes(Houdini::State* state, std::vector<std::string>& tokens) {
+ if (tokens.size() == 1) {
+    state->so->Output(RCLR(1)"use ptimes ? for help");
+    state->so->NewLine();
+    return;
+  }
+  
+  if (tokens[1] == "?") {
+    state->so->Output(RCLR(1)"ptimes p[pid]");
+    state->so->NewLine();
+  } 
+
+  HANDLE process = OpenProcess(tokens[1].c_str(),
+                               PROCESS_QUERY_LIMITED_INFORMATION, -1,
+                               state->so);
+  if (!process)
+    return;
+  ListProcessTimes(process, state->so);
+  state->so->NewLine();
 }
 
-// \\cf1 %d \\cf0 tests to run. Time is %d:%d.%d \\line
+Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
+  // Done with initialization, signal user to start working.
+  so->Output(RCLR(1)"type "RCLR(0)"help"RCLR(1)" for available commands");
+  so->NewLine();
+}
 
 Houdini::~Houdini() {
   delete state_;
@@ -323,9 +367,6 @@ Houdini::~Houdini() {
 void Houdini::InputCommand(const char* command) {
   // Echo the command in the results pane.
   std::string comm(command);
-#if 0
-  locase_str(comm);
-#endif
   state_->so->Output(">");
   state_->so->Output(comm.c_str());
   state_->so->NewLine();
@@ -346,6 +387,9 @@ void Houdini::InputCommand(const char* command) {
   } else if (verb == "plist") {
     // List the currently running processes.
     OnPList(state_, tokens);
+  } else if (verb == "ptimes") {
+    // List a particular process times
+    OnPTimes(state_, tokens);
   } else {
     state_->so->Output("\\cf1 wat? type help next time");
     state_->so->NewLine();
