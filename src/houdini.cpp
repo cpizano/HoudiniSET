@@ -347,7 +347,7 @@ void Houdini::InputCommand(const char* command) {
     // List the currently running processes.
     OnPList(state_, tokens);
   } else {
-    state_->so->Output("\\cf1 huh?");
+    state_->so->Output("\\cf1 wat? type help next time");
     state_->so->NewLine();
   } 
 }

@@ -47,6 +47,10 @@ void AddRTF(HWND hWnd, const std::string& text1) {
   delete[] buf;
 }
 
+void ScrollOneDown(HWND hWnd) {
+  ::SendMessageW(hWnd, EM_SCROLL, SB_LINEDOWN, 0);
+}
+
 }  // namespace.
 
 class RichEditOutput : public houdini::ScreenOutput {
@@ -58,6 +62,7 @@ public:
 
   void ScreenOutput::NewLine() override {
     AddRTF(hwnd_, " \\line");
+    ScrollOneDown(hwnd_);
   }
 
 private:
