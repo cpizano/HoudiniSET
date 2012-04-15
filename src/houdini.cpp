@@ -105,7 +105,7 @@ HANDLE OpenProcess(const char* process_spec,
   DWORD gle = ::GetLastError();
   oss << RCLR(1)"failed to open process "RCLR(2) << pid;
   oss << RCLR(1)" requesting "RCLR(2) << fallback_access << RCLR(1)" access.";
-  oss << " error \\cf2 " << gle;
+  oss << " win32 error "RCLR(2) << gle;
   so->Output(oss.str().c_str());
   so->NewLine();
   return NULL;   
@@ -266,17 +266,17 @@ void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
 
 void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
-    state->so->Output("\\cf1 commands are");
+    state->so->Output(RCLR(1)"commands are");
     state->so->NewLine();
-    state->so->Output("\\cf1 help");
+    state->so->Output("help ");
     state->so->NewLine();
-    state->so->Output("\\cf1 quit or exit");
+    state->so->Output("quit "RCLR(1)"or"RCLR(0)" exit");
     state->so->NewLine();
-    state->so->Output("\\cf1 track");
+    state->so->Output("track "RCLR(1)":get notified when a process exits");
     state->so->NewLine();
-    state->so->Output("\\cf1 plist");
+    state->so->Output("plist "RCLR(1)":get the list of running processes");
     state->so->NewLine();
-    state->so->Output("\\cf1 ptimes");
+    state->so->Output("ptimes "RCLR(1)":get the start and end times of a process");
     state->so->NewLine();
   }
   else {
@@ -287,13 +287,13 @@ void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
 
 void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
-    state->so->Output("\\cf1 use track ? for help");
+    state->so->Output(RCLR(1)"use track ? for help");
     state->so->NewLine();
     return;
   }
   
   if (tokens[1] == "?") {
-    state->so->Output("\\cf1 track p[pid]");
+    state->so->Output(RCLR(1)"track p[pid]");
     state->so->NewLine();
   } else {
     ScopedWriteLock lock(&state->rwlock);
@@ -343,6 +343,7 @@ void OnPTimes(Houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens[1] == "?") {
     state->so->Output(RCLR(1)"ptimes p[pid]");
     state->so->NewLine();
+    return;
   } 
 
   HANDLE process = OpenProcess(tokens[1].c_str(),
@@ -391,7 +392,7 @@ void Houdini::InputCommand(const char* command) {
     // List a particular process times
     OnPTimes(state_, tokens);
   } else {
-    state_->so->Output("\\cf1 wat? type help next time");
+    state_->so->Output(RCLR(1)"wot? type "RCLR(0)"help"RCLR(1)" next time");
     state_->so->NewLine();
   } 
 }
