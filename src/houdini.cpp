@@ -10,6 +10,8 @@
 #include <sstream>
 #include <map>
 
+#include "houdini_state.h"
+
 #pragma comment(lib, "psapi.lib")
 
 #define RCLR(x) "\\cf"#x" "
@@ -192,6 +194,8 @@ DWORD ListProcessTimes(HANDLE process, houdini::ScreenOutput* so) {
 
 }  // namespace
 
+namespace houdini {
+
 struct ProcessTracker {
   DWORD pid;
   std::string how;
@@ -206,22 +210,12 @@ struct ProcessTracker {
 
 };
 
-struct Houdini::State {
-  SRWLOCK rwlock;
-  ScreenOutput* so;
-  std::map<HANDLE, ProcessTracker> processes;
-  std::map<TP_WAIT*, HANDLE> reg_ob_waits;
-
-  State(ScreenOutput* so_i) {
-    so = so_i;
-    ::InitializeSRWLock(&rwlock);
-  }
-};
+} // namespace
 
 struct PoolWaitContext {
-  Houdini::State* state;
+  houdini::State* state;
   HANDLE handle;
-  PoolWaitContext(Houdini::State* state_i, HANDLE handle_i)
+  PoolWaitContext(houdini::State* state_i, HANDLE handle_i)
     : state(state_i), handle(handle_i) {}
 };
 
@@ -242,12 +236,12 @@ void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
       ctx.state->so->Output(oss.str().c_str());
       return;
     } else {
-      oss << RCLR(1)"process "RCLR(2) << it->second.pid << RCLR(1)" terminated,";
+      oss << RCLR(1)"process "RCLR(2) << it->second->pid << RCLR(1)" terminated,";
       DWORD exit_code;
       if (::GetExitCodeProcess(it->first, &exit_code)) {
         oss << " exit code "RCLR(2) << exit_code;
       }
-      oss << RCLR(1)" tracked for "RCLR(2) << (time - it->second.when) << "ms ";
+      oss << RCLR(1)" tracked for "RCLR(2) << (time - it->second->when) << "ms ";
       ctx.state->so->Output(oss.str().c_str());
       ctx.state->so->NewLine();
       ListProcessTimes(it->first, ctx.state->so);
@@ -264,7 +258,7 @@ void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
   }  // write lock end
 }
 
-void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
+void OnHelp(houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
     state->so->Output(RCLR(1)"commands are");
     state->so->NewLine();
@@ -285,7 +279,7 @@ void OnHelp(Houdini::State* state, std::vector<std::string>& tokens) {
   }
 }
 
-void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
+void OnTrack(houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
     state->so->Output(RCLR(1)"use track ? for help");
     state->so->NewLine();
@@ -305,7 +299,7 @@ void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
       return;
     DWORD pid = ::GetProcessId(handle);
 
-    state->processes[handle] = ProcessTracker(pid, "track");
+    state->processes[handle] = new ProcessTracker(pid, "track");
     PoolWaitContext* pwc = new PoolWaitContext(state, handle);
     TP_WAIT* wait_object = ::CreateThreadpoolWait(&PoolWaitCallback, pwc, NULL);
     state->reg_ob_waits[wait_object] = handle;
@@ -317,7 +311,7 @@ void OnTrack(Houdini::State* state, std::vector<std::string>& tokens) {
   }
 }
 
-void OnPList(Houdini::State* state, std::vector<std::string>& tokens) {
+void OnPList(houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
     ListProcesses(NULL, state->so);
   } else if (tokens.size() == 2) {
@@ -333,7 +327,7 @@ void OnPList(Houdini::State* state, std::vector<std::string>& tokens) {
   }
 }
 
-void OnPTimes(Houdini::State* state, std::vector<std::string>& tokens) {
+void OnPTimes(houdini::State* state, std::vector<std::string>& tokens) {
  if (tokens.size() == 1) {
     state->so->Output(RCLR(1)"use ptimes ? for help");
     state->so->NewLine();
@@ -355,7 +349,7 @@ void OnPTimes(Houdini::State* state, std::vector<std::string>& tokens) {
   state->so->NewLine();
 }
 
-void OnConvert(Houdini::State* state, std::vector<std::string>& tokens) {
+void OnConvert(houdini::State* state, std::vector<std::string>& tokens) {
   if (tokens.size() == 1) {
     state->so->Output(RCLR(1)"use conv ? for help");
     state->so->NewLine();

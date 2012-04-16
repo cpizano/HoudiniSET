@@ -33,6 +33,9 @@
     <ClInclude Include="src\resource.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\houdini_state.h">
+      <Filter>src</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="README">

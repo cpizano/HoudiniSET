@@ -2,6 +2,8 @@
 
 namespace houdini {
 
+struct State;
+
 class ScreenOutput {
 public:
   virtual void Output(const char* text) = 0;
@@ -10,8 +12,6 @@ public:
 
 class Houdini {
 public:
-  struct State;
-
   Houdini(ScreenOutput* output);
   ~Houdini();
   void InputCommand(const char* command);

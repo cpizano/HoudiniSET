@@ -84,6 +84,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\houdini.h" />
+    <ClInclude Include="src\houdini_state.h" />
     <ClInclude Include="src\resource.h" />
   </ItemGroup>
   <ItemGroup>
