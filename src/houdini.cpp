@@ -355,6 +355,42 @@ void OnPTimes(Houdini::State* state, std::vector<std::string>& tokens) {
   state->so->NewLine();
 }
 
+void OnConvert(Houdini::State* state, std::vector<std::string>& tokens) {
+  if (tokens.size() == 1) {
+    state->so->Output(RCLR(1)"use conv ? for help");
+    state->so->NewLine();
+    return;
+  } else if (tokens[1] == "?") {
+    state->so->Output(RCLR(1)"conv filetime number");
+    state->so->NewLine();
+    return;
+  } else if (tokens.size() == 3) {
+    if (tokens[1] == "filetime") {
+      std::istringstream iss(tokens[2]);
+      ULARGE_INTEGER uli;
+      iss >> uli.QuadPart;
+      FILETIME ft = {uli.LowPart, uli.HighPart};
+      FILETIME lft = {0};
+      if (!::FileTimeToLocalFileTime(&ft, &lft)) {
+        state->so->Output(RCLR(1)"invalid filetime #1");
+        state->so->NewLine();
+        return;
+      }
+      SYSTEMTIME st = {0};
+      if (!::FileTimeToSystemTime(&lft, &st)) {
+        state->so->Output(RCLR(1)"invalid filetime #2");
+        state->so->NewLine();
+        return;
+      }
+      std::ostringstream oss;
+      oss << RCLR(1) << st.wYear << "." << st.wMonth << "." << st.wDay << " ";
+      oss << st.wHour << ":" << st.wMinute << "." << st.wSecond;
+      state->so->Output(oss.str().c_str());
+      state->so->NewLine();
+    }
+  }
+}
+
 Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
   // Done with initialization, signal user to start working.
   so->Output(RCLR(1)"type "RCLR(0)"help"RCLR(1)" for available commands");
@@ -391,6 +427,9 @@ void Houdini::InputCommand(const char* command) {
   } else if (verb == "ptimes") {
     // List a particular process times
     OnPTimes(state_, tokens);
+  } else if (verb == "conv") {
+    // Coverts filetime
+    OnConvert(state_, tokens);
   } else {
     state_->so->Output(RCLR(1)"wot? type "RCLR(0)"help"RCLR(1)" next time");
     state_->so->NewLine();
