@@ -299,7 +299,7 @@ void OnTrack(houdini::State* state, std::vector<std::string>& tokens) {
       return;
     DWORD pid = ::GetProcessId(handle);
 
-    state->processes[handle] = new ProcessTracker(pid, "track");
+    state->processes[handle].reset(new ProcessTracker(pid, "track"));
     PoolWaitContext* pwc = new PoolWaitContext(state, handle);
     TP_WAIT* wait_object = ::CreateThreadpoolWait(&PoolWaitCallback, pwc, NULL);
     state->reg_ob_waits[wait_object] = handle;
