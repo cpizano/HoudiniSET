@@ -23,6 +23,15 @@
     <ClCompile Include="src\process_list.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\conversions.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\process_times.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\process_track.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="HoudiniSET.rc">

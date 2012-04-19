@@ -1,9 +1,9 @@
 #include "houdini_command.h"
 
 
-class ProcessList : public houdini::Command {
+class Conversions : public houdini::Command {
 public:
-  virtual ~ProcessList() {};
+  virtual ~Conversions() {};
 
 protected:
   virtual void OnCommand(houdini::ScreenOutput* so,
@@ -18,11 +18,11 @@ protected:
 
 };
 
-houdini::CmdDescriptor MakeProcessListCommand() {
+houdini::CmdDescriptor MakeConversionsCommand() {
   houdini::CmdDescriptor cd = {
-    "plist", 
-    "some plist help here",
-    new ProcessList()
+    "conv", 
+    "some conv help here",
+    new Conversions()
   };
   return cd;
 }

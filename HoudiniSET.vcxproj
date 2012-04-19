@@ -76,9 +76,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\conversions.cpp" />
     <ClCompile Include="src\houdini.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\process_list.cpp" />
+    <ClCompile Include="src\process_times.cpp" />
+    <ClCompile Include="src\process_track.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="HoudiniSET.rc" />

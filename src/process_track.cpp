@@ -1,9 +1,9 @@
 #include "houdini_command.h"
 
 
-class ProcessList : public houdini::Command {
+class ProcessTracker : public houdini::Command {
 public:
-  virtual ~ProcessList() {};
+  virtual ~ProcessTracker() {};
 
 protected:
   virtual void OnCommand(houdini::ScreenOutput* so,
@@ -18,11 +18,11 @@ protected:
 
 };
 
-houdini::CmdDescriptor MakeProcessListCommand() {
+houdini::CmdDescriptor MakeProcessTrackerCommand() {
   houdini::CmdDescriptor cd = {
-    "plist", 
-    "some plist help here",
-    new ProcessList()
+    "ptrack", 
+    "some ptrack help here",
+    new ProcessTracker()
   };
   return cd;
 }

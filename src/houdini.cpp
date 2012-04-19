@@ -404,10 +404,16 @@ void OnConvert(houdini::State* state, std::vector<std::string>& tokens) {
 }
 
 CmdDescriptor MakeProcessListCommand();
+CmdDescriptor MakeProcessTimesCommand();
+CmdDescriptor MakeProcessTrackerCommand();
+CmdDescriptor MakeConversionsCommand();
 
 Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
 
   state_->commands.push_back(MakeProcessListCommand());
+  state_->commands.push_back(MakeProcessTimesCommand());
+  state_->commands.push_back(MakeProcessTrackerCommand());
+  state_->commands.push_back(MakeConversionsCommand());
 
   // Done with initialization, signal user to start working.
   so->Output(RCLR(1)"type "RCLR(0)"help"RCLR(1)" for available commands");
