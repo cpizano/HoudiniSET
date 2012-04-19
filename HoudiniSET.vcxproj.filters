@@ -20,6 +20,9 @@
     <ClCompile Include="src\houdini.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\process_list.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="HoudiniSET.rc">
@@ -33,7 +36,7 @@
     <ClInclude Include="src\resource.h">
       <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="src\houdini_state.h">
+    <ClInclude Include="src\houdini_command.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

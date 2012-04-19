@@ -78,13 +78,14 @@
   <ItemGroup>
     <ClCompile Include="src\houdini.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\process_list.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="HoudiniSET.rc" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\houdini.h" />
-    <ClInclude Include="src\houdini_state.h" />
+    <ClInclude Include="src\houdini_command.h" />
     <ClInclude Include="src\resource.h" />
   </ItemGroup>
   <ItemGroup>

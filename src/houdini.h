@@ -1,8 +1,11 @@
 #pragma once
 
+#include <vector>
+
 namespace houdini {
 
 struct State;
+struct CmdDescriptor;
 
 class ScreenOutput {
 public:
@@ -18,6 +21,7 @@ public:
 
 private:
   State* state_;
+  std::vector<CmdDescriptor*> cmd_;
 };
 
 

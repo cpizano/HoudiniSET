@@ -10,7 +10,7 @@
 #include <sstream>
 #include <map>
 
-#include "houdini_state.h"
+#include "houdini_command.h"
 
 #pragma comment(lib, "psapi.lib")
 
@@ -78,6 +78,8 @@ private:
   ScopedWriteLock(const ScopedWriteLock&);
   SRWLOCK* rwlock_;
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 HANDLE OpenProcess(const char* process_spec,
                    DWORD access, DWORD fallback_access,
@@ -208,6 +210,22 @@ struct ProcessTracker {
     when = ::GetTickCount64();
   }
 
+};
+
+class ScreenOutput;
+struct ProcessTracker;
+
+struct State {
+  SRWLOCK rwlock;
+  ScreenOutput* so;
+  std::map<HANDLE, std::unique_ptr<ProcessTracker> > processes;
+  std::map<TP_WAIT*, HANDLE> reg_ob_waits;
+  std::vector<CmdDescriptor> commands;
+
+  State(ScreenOutput* so_i) {
+    so = so_i;
+    ::InitializeSRWLock(&rwlock);
+  }
 };
 
 } // namespace
@@ -385,7 +403,12 @@ void OnConvert(houdini::State* state, std::vector<std::string>& tokens) {
   }
 }
 
+CmdDescriptor MakeProcessListCommand();
+
 Houdini::Houdini(ScreenOutput* so) : state_(new State(so)) {
+
+  state_->commands.push_back(MakeProcessListCommand());
+
   // Done with initialization, signal user to start working.
   so->Output(RCLR(1)"type "RCLR(0)"help"RCLR(1)" for available commands");
   so->NewLine();
