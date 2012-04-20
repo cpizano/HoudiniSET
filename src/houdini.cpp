@@ -284,15 +284,17 @@ void OnHelp(houdini::State* state, std::vector<std::string>& tokens) {
     state->so->NewLine();
     state->so->Output("quit "RCLR(1)"or"RCLR(0)" exit");
     state->so->NewLine();
-    state->so->Output("track "RCLR(1)":get notified when a process exits");
-    state->so->NewLine();
-    state->so->Output("plist "RCLR(1)":get the list of running processes");
-    state->so->NewLine();
-    state->so->Output("ptimes "RCLR(1)":get the start and end times of a process");
-    state->so->NewLine();
+
+    for (auto it = state->commands.begin(); it != state->commands.end(); ++it) {
+      std::string ln(it->name.c_str());
+      ln.append(" "RCLR(1)":");
+      ln.append(it->desc);
+      state->so->Output(ln.c_str());
+      state->so->NewLine();
+    }
   }
   else {
-    state->so->Output("no command specific help yet");
+    state->so->Output("no other help yet");
     state->so->NewLine();
   }
 }
@@ -424,6 +426,26 @@ Houdini::~Houdini() {
   delete state_;
 }
 
+void DispatchCommand(Command* command,
+                     ScreenOutput* so,
+                     const std::vector<std::string>& tokens) {
+  switch (tokens.size()) {
+    case 2 :
+      if (tokens[1] == "?") {
+        command->OnHelp(so, ""); 
+        return;
+      }
+    case 3 :
+      if (tokens[1] == "?") {
+        command->OnHelp(so, tokens[2]);
+        return;
+      }
+    default:
+      command->OnCommand(so, tokens);
+      return;
+  }
+}
+
 void Houdini::InputCommand(const char* command) {
   // Echo the command in the results pane.
   std::string comm(command);
@@ -439,21 +461,17 @@ void Houdini::InputCommand(const char* command) {
   if (verb == "help") {
     OnHelp(state_, tokens);
   } else if (verb == "quit" || verb == "exit") {
-    // quitting is hard. for now just crap out.
+    // quitting is hard. for now just crap out. $BUG$
     ::ExitProcess(0);
-  } else if (verb == "track") {
-    // Track the lifetime of a given process.
-    OnTrack(state_, tokens);
-  } else if (verb == "plist") {
-    // List the currently running processes.
-    OnPList(state_, tokens);
-  } else if (verb == "ptimes") {
-    // List a particular process times
-    OnPTimes(state_, tokens);
-  } else if (verb == "conv") {
-    // Coverts filetime
-    OnConvert(state_, tokens);
   } else {
+    auto it = state_->commands.begin();
+    for (; it != state_->commands.end(); ++it) {
+      if (it->name == verb) {
+        DispatchCommand(it->cmd, state_->so, tokens);
+        return;
+      }
+    }
+    // Command is unknown.
     state_->so->Output(RCLR(1)"wot? type "RCLR(0)"help"RCLR(1)" next time");
     state_->so->NewLine();
   } 
