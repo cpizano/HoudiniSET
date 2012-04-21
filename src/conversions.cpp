@@ -4,7 +4,7 @@
 #include "houdini_command.h"
 #include "houdini.h"
 
-void FileTimeConvert(houdini::ScreenOutput* so, const std::vector<std::string>& tokens) {
+bool FileTimeConvert(houdini::ScreenOutput* so, const std::vector<std::string>& tokens) {
   std::istringstream iss(tokens[2]);
   ULARGE_INTEGER uli;
   iss >> uli.QuadPart;
@@ -12,20 +12,18 @@ void FileTimeConvert(houdini::ScreenOutput* so, const std::vector<std::string>& 
   FILETIME lft = {0};
   if (!::FileTimeToLocalFileTime(&ft, &lft)) {
     so->Output(RCLR(1)"invalid filetime #1");
-    so->NewLine();
-    return;
+    return false;
   }
   SYSTEMTIME st = {0};
   if (!::FileTimeToSystemTime(&lft, &st)) {
     so->Output(RCLR(1)"invalid filetime #2");
-    so->NewLine();
-    return;
+    return false;
   }
   std::ostringstream oss;
   oss << RCLR(1) << st.wYear << "." << st.wMonth << "." << st.wDay << " ";
   oss << st.wHour << ":" << st.wMinute << "." << st.wSecond;
   so->Output(oss.str().c_str());
-  so->NewLine();  
+  return true; 
 }
 
 
@@ -40,8 +38,7 @@ protected:
       return false;
     }
 
-    FileTimeConvert(so, tokens);
-    return true;
+    return FileTimeConvert(so, tokens);
   }
 
   virtual void OnHelp(houdini::ScreenOutput* so,
