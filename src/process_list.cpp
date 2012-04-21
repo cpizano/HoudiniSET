@@ -6,8 +6,9 @@ public:
   virtual ~ProcessList() {};
 
 protected:
-  virtual void OnCommand(houdini::ScreenOutput* so,
+  virtual bool OnCommand(houdini::ScreenOutput* so,
                          const std::vector<std::string>& tokens) override {
+    return true;
 
   }
 

@@ -14,8 +14,6 @@
 
 #pragma comment(lib, "psapi.lib")
 
-#define RCLR(x) "\\cf"#x" "
-
 using namespace houdini;
 
 namespace {
@@ -369,42 +367,6 @@ void OnPTimes(houdini::State* state, std::vector<std::string>& tokens) {
   state->so->NewLine();
 }
 
-void OnConvert(houdini::State* state, std::vector<std::string>& tokens) {
-  if (tokens.size() == 1) {
-    state->so->Output(RCLR(1)"use conv ? for help");
-    state->so->NewLine();
-    return;
-  } else if (tokens[1] == "?") {
-    state->so->Output(RCLR(1)"conv filetime number");
-    state->so->NewLine();
-    return;
-  } else if (tokens.size() == 3) {
-    if (tokens[1] == "filetime") {
-      std::istringstream iss(tokens[2]);
-      ULARGE_INTEGER uli;
-      iss >> uli.QuadPart;
-      FILETIME ft = {uli.LowPart, uli.HighPart};
-      FILETIME lft = {0};
-      if (!::FileTimeToLocalFileTime(&ft, &lft)) {
-        state->so->Output(RCLR(1)"invalid filetime #1");
-        state->so->NewLine();
-        return;
-      }
-      SYSTEMTIME st = {0};
-      if (!::FileTimeToSystemTime(&lft, &st)) {
-        state->so->Output(RCLR(1)"invalid filetime #2");
-        state->so->NewLine();
-        return;
-      }
-      std::ostringstream oss;
-      oss << RCLR(1) << st.wYear << "." << st.wMonth << "." << st.wDay << " ";
-      oss << st.wHour << ":" << st.wMinute << "." << st.wSecond;
-      state->so->Output(oss.str().c_str());
-      state->so->NewLine();
-    }
-  }
-}
-
 CmdDescriptor MakeProcessListCommand();
 CmdDescriptor MakeProcessTimesCommand();
 CmdDescriptor MakeProcessTrackerCommand();
@@ -441,7 +403,12 @@ void DispatchCommand(Command* command,
         return;
       }
     default:
-      command->OnCommand(so, tokens);
+      if (!command->OnCommand(so, tokens)) {
+        // command was rejected, give general help.
+        std::string msg(RCLR(1)"Unknown options. Use "RCLR(0));
+        msg += tokens[0] + " ? "RCLR(1)"for more help";
+        so->Output(msg.c_str());
+      }
       return;
   }
 }
@@ -468,11 +435,12 @@ void Houdini::InputCommand(const char* command) {
     for (; it != state_->commands.end(); ++it) {
       if (it->name == verb) {
         DispatchCommand(it->cmd, state_->so, tokens);
+        state_->so->NewLine();
         return;
       }
     }
     // Command is unknown.
-    state_->so->Output(RCLR(1)"wot? type "RCLR(0)"help"RCLR(1)" next time");
+    state_->so->Output(RCLR(1)"wot? Holmes, type "RCLR(0)"help"RCLR(1)" next time.");
     state_->so->NewLine();
   } 
 }

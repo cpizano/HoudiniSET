@@ -6,9 +6,9 @@ public:
   virtual ~ProcessTracker() {};
 
 protected:
-  virtual void OnCommand(houdini::ScreenOutput* so,
+  virtual bool OnCommand(houdini::ScreenOutput* so,
                          const std::vector<std::string>& tokens) override {
-
+    return true;
   }
 
   virtual void OnHelp(houdini::ScreenOutput* so,
