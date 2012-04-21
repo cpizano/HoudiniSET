@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 
 #include <string>
 #include <vector>
@@ -24,5 +25,13 @@ struct CmdDescriptor {
   std::string desc;
   Command* cmd;
 };
+
+
+HANDLE OpenProcessSpec(const char* process_spec,
+                       DWORD access, DWORD fallback_access,
+                       ScreenOutput* so);
+
+DWORD PrintProcessTimes(HANDLE process, ScreenOutput* so);
+ 
 
 }  // namespace

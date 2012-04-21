@@ -79,40 +79,6 @@ private:
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-HANDLE OpenProcess(const char* process_spec,
-                   DWORD access, DWORD fallback_access,
-                   houdini::ScreenOutput* so) {
-  char p_or_h = 0;
-  unsigned int pid = 0;
-  std::istringstream iss(process_spec);
-  std::ostringstream oss;
-  iss >> p_or_h;
-  if (p_or_h != 'p') {
-    so->Output(RCLR(1)"invalid process id format, use p[pid]");
-    so->NewLine();
-    return NULL;
-  }
-  iss >> pid;
-  HANDLE handle = ::OpenProcess(access, FALSE, pid);
-  if (handle) {
-    return handle;
-  }
-  if (fallback_access != -1) {
-    handle = ::OpenProcess(fallback_access, FALSE, pid);
-    if (handle) {
-      return handle;
-    }
-  }
-
-  DWORD gle = ::GetLastError();
-  oss << RCLR(1)"failed to open process "RCLR(2) << pid;
-  oss << RCLR(1)" requesting "RCLR(2) << fallback_access << RCLR(1)" access.";
-  oss << " win32 error "RCLR(2) << gle;
-  so->Output(oss.str().c_str());
-  so->NewLine();
-  return NULL;   
-}
-
 DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
   DWORD pids[2048];
   DWORD needed;
@@ -171,7 +137,45 @@ DWORD ListProcesses(const char* filter, houdini::ScreenOutput* so) {
   return 0;
 }
 
-DWORD ListProcessTimes(HANDLE process, houdini::ScreenOutput* so) {
+}  // namespace
+
+namespace houdini {
+
+HANDLE OpenProcessSpec(const char* process_spec,
+                       DWORD access, DWORD fallback_access,
+                       houdini::ScreenOutput* so) {
+  char p_or_h = 0;
+  unsigned int pid = 0;
+  std::istringstream iss(process_spec);
+  std::ostringstream oss;
+  iss >> p_or_h;
+  if (p_or_h != 'p') {
+    so->Output(RCLR(1)"invalid process id format, use p[pid]");
+    so->NewLine();
+    return NULL;
+  }
+  iss >> pid;
+  HANDLE handle = ::OpenProcess(access, FALSE, pid);
+  if (handle) {
+    return handle;
+  }
+  if (fallback_access != -1) {
+    handle = ::OpenProcess(fallback_access, FALSE, pid);
+    if (handle) {
+      return handle;
+    }
+  }
+
+  DWORD gle = ::GetLastError();
+  oss << RCLR(1)"failed to open process "RCLR(2) << pid;
+  oss << RCLR(1)" requesting "RCLR(2) << fallback_access << RCLR(1)" access.";
+  oss << " win32 error "RCLR(2) << gle;
+  so->Output(oss.str().c_str());
+  so->NewLine();
+  return NULL;   
+}
+
+DWORD PrintProcessTimes(HANDLE process, houdini::ScreenOutput* so) {
   FILETIME creation;
   FILETIME exit;
   FILETIME kernel;
@@ -192,9 +196,6 @@ DWORD ListProcessTimes(HANDLE process, houdini::ScreenOutput* so) {
   return 0;
 }
 
-}  // namespace
-
-namespace houdini {
 
 struct ProcessTracker {
   DWORD pid;
@@ -260,7 +261,7 @@ void CALLBACK PoolWaitCallback(TP_CALLBACK_INSTANCE* instance,
       oss << RCLR(1)" tracked for "RCLR(2) << (time - it->second->when) << "ms ";
       ctx.state->so->Output(oss.str().c_str());
       ctx.state->so->NewLine();
-      ListProcessTimes(it->first, ctx.state->so);
+      PrintProcessTimes(it->first, ctx.state->so);
       ctx.state->so->NewLine();
     }
   }  // read lock end
@@ -310,9 +311,9 @@ void OnTrack(houdini::State* state, std::vector<std::string>& tokens) {
   } else {
     ScopedWriteLock lock(&state->rwlock);
     std::ostringstream oss;
-    HANDLE handle = OpenProcess(tokens[1].c_str(), 
-                                SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, SYNCHRONIZE,
-                                state->so);
+    HANDLE handle = OpenProcessSpec(tokens[1].c_str(), 
+        SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, SYNCHRONIZE,
+        state->so);
     if (!handle)
       return;
     DWORD pid = ::GetProcessId(handle);
@@ -343,28 +344,6 @@ void OnPList(houdini::State* state, std::vector<std::string>& tokens) {
     state->so->Output(RCLR(1)"unknown param");
     state->so->NewLine();
   }
-}
-
-void OnPTimes(houdini::State* state, std::vector<std::string>& tokens) {
- if (tokens.size() == 1) {
-    state->so->Output(RCLR(1)"use ptimes ? for help");
-    state->so->NewLine();
-    return;
-  }
-  
-  if (tokens[1] == "?") {
-    state->so->Output(RCLR(1)"ptimes p[pid]");
-    state->so->NewLine();
-    return;
-  } 
-
-  HANDLE process = OpenProcess(tokens[1].c_str(),
-                               PROCESS_QUERY_LIMITED_INFORMATION, -1,
-                               state->so);
-  if (!process)
-    return;
-  ListProcessTimes(process, state->so);
-  state->so->NewLine();
 }
 
 CmdDescriptor MakeProcessListCommand();
